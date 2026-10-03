@@ -1,6 +1,6 @@
 import { Ball } from './Ball';
 import { Player } from './Player';
-import type { JevController } from './JevController';
+import type { PolicyController } from './JevController';
 import { BALL_SPEEDS, COURT, WINNING_SCORE } from './types';
 import type { BallSpeed, GameSnapshot, JevDecision, Side } from './types';
 
@@ -10,12 +10,13 @@ export class GameEngine {
   readonly jev = new Player('jev');
   private keys = new Set<string>();
   private pointTimer = 0;
+  private pausedState: 'PLAYING' | 'POINT_SCORED' | null = null;
   private snapshot: GameSnapshot = {
     state: 'READY', humanScore: 0, jevScore: 0, speed: 1,
     decision: 'STAY', winner: null, lastScorer: null,
   };
 
-  constructor(private readonly controller: JevController = { decide: () => 'STAY' }) {}
+  constructor(private readonly controller: PolicyController = { decide: () => 'STAY' }) {}
 
   getSnapshot(): GameSnapshot { return { ...this.snapshot }; }
 
@@ -25,7 +26,19 @@ export class GameEngine {
     this.snapshot.state = 'PLAYING';
   }
 
+  togglePause() {
+    if (this.snapshot.state === 'PAUSED' && this.pausedState) {
+      this.snapshot.state = this.pausedState;
+      this.pausedState = null;
+    } else if (this.snapshot.state === 'PLAYING' || this.snapshot.state === 'POINT_SCORED') {
+      this.pausedState = this.snapshot.state;
+      this.snapshot.state = 'PAUSED';
+      this.clearInput();
+    }
+  }
+
   restart() {
+    this.pausedState = null;
     this.snapshot = {
       state: 'READY', humanScore: 0, jevScore: 0, speed: this.snapshot.speed,
       decision: 'STAY', winner: null, lastScorer: null,

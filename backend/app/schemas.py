@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class GameState(BaseModel):
@@ -26,3 +26,15 @@ class Prediction(BaseModel):
 class PredictResponse(Prediction):
     latency_ms: float = Field(ge=0, allow_inf_nan=False)
     provider: str
+
+
+class NormalizedRequest(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False, extra="forbid")
+    model: Literal["jev", "tiny_mlp"]
+    features: list[float] = Field(min_length=8, max_length=8)
+
+    @model_validator(mode="after")
+    def positive_dimensions(self):
+        if self.features[5] <= 0 or self.features[6] <= 0 or self.features[7] <= 0:
+            raise ValueError("Paddle and court dimensions must be positive")
+        return self

@@ -139,3 +139,55 @@ test('engine consumes cached decisions without passing game coordinates', () => 
   assert.equal(engine.getSnapshot().decision, 'STAY');
   assert.equal(engine.jev.x, x);
 });
+
+test('pause freezes ball, paddles, scoring and policy decisions; repeated resume preserves the rally', () => {
+  let decisions = 0;
+  const engine = new GameEngine({ decide: () => { decisions++; return 'RIGHT'; } });
+  engine.start();
+  engine.setKey('a', true);
+  engine.update(0.01);
+  const saved = [engine.ball.x, engine.ball.y, engine.human.x, engine.jev.x, decisions];
+  engine.togglePause();
+  assert.equal(engine.getSnapshot().state, 'PAUSED');
+  for (let i = 0; i < 50; i++) engine.update(0.05);
+  assert.deepEqual([engine.ball.x, engine.ball.y, engine.human.x, engine.jev.x, decisions], saved);
+  for (let i = 0; i < 20; i++) { engine.togglePause(); engine.togglePause(); }
+  assert.equal(engine.getSnapshot().state, 'PAUSED');
+  engine.togglePause();
+  assert.equal(engine.getSnapshot().state, 'PLAYING');
+  engine.update(0.01);
+  assert.notEqual(engine.ball.y, saved[1]);
+  assert.equal(engine.human.x, saved[2]); // input cleared on pause
+  assert.ok(decisions > saved[4]);
+});
+
+test('pause preserves the point timer; restart from paused starts a fresh running match', () => {
+  const engine = game();
+  miss(engine, 'human');
+  engine.update(0.05);
+  engine.togglePause();
+  for (let i = 0; i < 100; i++) engine.update(0.05);
+  engine.togglePause();
+  assert.equal(engine.getSnapshot().state, 'POINT_SCORED');
+  engine.update(0.05);
+  assert.equal(engine.getSnapshot().state, 'POINT_SCORED');
+  for (let i = 0; i < 20; i++) engine.update(0.05);
+  assert.equal(engine.getSnapshot().state, 'PLAYING');
+  engine.togglePause();
+  engine.restart();
+  assert.equal(engine.getSnapshot().state, 'PLAYING');
+  assert.equal(engine.getSnapshot().humanScore, 0);
+});
+
+test('pause has no effect before start or after game over', () => {
+  const engine = new GameEngine();
+  engine.togglePause();
+  assert.equal(engine.getSnapshot().state, 'READY');
+  engine.start();
+  for (let i = 0; i < 10; i++) {
+    miss(engine, 'human');
+    if (i < 9) for (let j = 0; j < 20; j++) engine.update(0.05);
+  }
+  engine.togglePause();
+  assert.equal(engine.getSnapshot().state, 'GAME_OVER');
+});

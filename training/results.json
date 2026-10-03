@@ -1,0 +1,413 @@
+{
+  "training": {
+    "epoch": 93,
+    "training_accuracy": 0.8892083168029785,
+    "validation_accuracy": 0.8806666731834412,
+    "training_loss": 0.27611044049263,
+    "validation_loss": 0.2908913493156433,
+    "samples": 30000,
+    "train_samples": 24000,
+    "validation_samples": 6000,
+    "seed": 42,
+    "architecture": "8-32-ReLU-32-ReLU-3",
+    "parameters": 1443
+  },
+  "standard_matches": [
+    {
+      "model": "tiny_mlp",
+      "classification_samples": 3000,
+      "classification_accuracy": 0.8936666666666667,
+      "class_accuracy": {
+        "LEFT": 0.881,
+        "STAY": 0.897,
+        "RIGHT": 0.903
+      },
+      "confusion_matrix_rows_true_columns_predicted": [
+        [
+          881,
+          89,
+          30
+        ],
+        [
+          28,
+          897,
+          75
+        ],
+        [
+          9,
+          88,
+          903
+        ]
+      ],
+      "inference_latency": {
+        "median_ms": 0.013834098353981972,
+        "p95_ms": 0.017165904864668846
+      },
+      "games": 100,
+      "average_returns": 36.03,
+      "average_opponent_score": 0,
+      "randomized_opening": false,
+      "average_score": 0,
+      "median_score": 0.0,
+      "best_score": 0,
+      "miss_rate_percent": 0.0,
+      "completed_games": 0,
+      "max_game_seconds": 120,
+      "opponent": "oracle, human paddle speed 560",
+      "decision_interval_ms": 100,
+      "simulated_inference_delay_ms": 0.013834098353981972,
+      "seed": 2026
+    },
+    {
+      "model": "oracle",
+      "classification_samples": 3000,
+      "classification_accuracy": 1.0,
+      "class_accuracy": {
+        "LEFT": 1.0,
+        "STAY": 1.0,
+        "RIGHT": 1.0
+      },
+      "confusion_matrix_rows_true_columns_predicted": [
+        [
+          1000,
+          0,
+          0
+        ],
+        [
+          0,
+          1000,
+          0
+        ],
+        [
+          0,
+          0,
+          1000
+        ]
+      ],
+      "inference_latency": {
+        "median_ms": 0.0005830079317092896,
+        "p95_ms": 0.000708969309926033
+      },
+      "games": 100,
+      "average_returns": 36.79,
+      "average_opponent_score": 0,
+      "randomized_opening": false,
+      "average_score": 0,
+      "median_score": 0.0,
+      "best_score": 0,
+      "miss_rate_percent": 0.0,
+      "completed_games": 0,
+      "max_game_seconds": 120,
+      "opponent": "oracle, human paddle speed 560",
+      "decision_interval_ms": 100,
+      "simulated_inference_delay_ms": 0,
+      "seed": 2026
+    }
+  ],
+  "randomized_matches": [
+    {
+      "model": "tiny_mlp",
+      "classification_samples": 3000,
+      "classification_accuracy": 0.8936666666666667,
+      "class_accuracy": {
+        "LEFT": 0.881,
+        "STAY": 0.897,
+        "RIGHT": 0.903
+      },
+      "confusion_matrix_rows_true_columns_predicted": [
+        [
+          881,
+          89,
+          30
+        ],
+        [
+          28,
+          897,
+          75
+        ],
+        [
+          9,
+          88,
+          903
+        ]
+      ],
+      "inference_latency": {
+        "median_ms": 0.013333046808838844,
+        "p95_ms": 0.01591700129210949
+      },
+      "games": 100,
+      "average_returns": 35.74,
+      "average_opponent_score": 0.24,
+      "randomized_opening": true,
+      "average_score": 0.12,
+      "median_score": 0.0,
+      "best_score": 1,
+      "miss_rate_percent": 0.6670372429127293,
+      "completed_games": 0,
+      "max_game_seconds": 120,
+      "opponent": "oracle, human paddle speed 560",
+      "decision_interval_ms": 100,
+      "simulated_inference_delay_ms": 0.013333046808838844,
+      "seed": 2026
+    },
+    {
+      "model": "oracle",
+      "classification_samples": 3000,
+      "classification_accuracy": 1.0,
+      "class_accuracy": {
+        "LEFT": 1.0,
+        "STAY": 1.0,
+        "RIGHT": 1.0
+      },
+      "confusion_matrix_rows_true_columns_predicted": [
+        [
+          1000,
+          0,
+          0
+        ],
+        [
+          0,
+          1000,
+          0
+        ],
+        [
+          0,
+          0,
+          1000
+        ]
+      ],
+      "inference_latency": {
+        "median_ms": 0.0005830079317092896,
+        "p95_ms": 0.000708969309926033
+      },
+      "games": 100,
+      "average_returns": 36.36,
+      "average_opponent_score": 0.22,
+      "randomized_opening": true,
+      "average_score": 0.12,
+      "median_score": 0.0,
+      "best_score": 1,
+      "miss_rate_percent": 0.6014215418261345,
+      "completed_games": 0,
+      "max_game_seconds": 120,
+      "opponent": "oracle, human paddle speed 560",
+      "decision_interval_ms": 100,
+      "simulated_inference_delay_ms": 0,
+      "seed": 2026
+    }
+  ],
+  "http_benchmark": [
+    {
+      "model": "jev",
+      "provider": "openjev",
+      "samples": 100,
+      "seed": 2026,
+      "warmups": 5,
+      "server_inference_latency": {
+        "median_ms": 207.0,
+        "p95_ms": 214.63
+      },
+      "http_roundtrip_latency": {
+        "median_ms": 208.53174990043044,
+        "p95_ms": 216.15141606889665
+      }
+    },
+    {
+      "model": "tiny_mlp",
+      "provider": "tiny_mlp",
+      "samples": 100,
+      "seed": 2026,
+      "warmups": 5,
+      "server_inference_latency": {
+        "median_ms": 0.04,
+        "p95_ms": 0.06
+      },
+      "http_roundtrip_latency": {
+        "median_ms": 0.6646254332736135,
+        "p95_ms": 0.9835830423980951
+      }
+    }
+  ],
+  "short_jev_comparison": [
+    {
+      "model": "tiny_mlp",
+      "classification_samples": 300,
+      "classification_accuracy": 0.87,
+      "class_accuracy": {
+        "LEFT": 0.86,
+        "STAY": 0.9,
+        "RIGHT": 0.85
+      },
+      "confusion_matrix_rows_true_columns_predicted": [
+        [
+          86,
+          12,
+          2
+        ],
+        [
+          3,
+          90,
+          7
+        ],
+        [
+          1,
+          14,
+          85
+        ]
+      ],
+      "inference_latency": {
+        "median_ms": 0.013584038242697716,
+        "p95_ms": 0.02333289012312889
+      },
+      "games": 3,
+      "average_returns": 5.666666666666667,
+      "average_opponent_score": 0.3333333333333333,
+      "randomized_opening": true,
+      "average_score": 0,
+      "median_score": 0,
+      "best_score": 0,
+      "miss_rate_percent": 5.555555555555555,
+      "completed_games": 0,
+      "max_game_seconds": 20.0,
+      "opponent": "oracle, human paddle speed 560",
+      "decision_interval_ms": 100,
+      "simulated_inference_delay_ms": 0.013584038242697716,
+      "seed": 2026
+    },
+    {
+      "model": "oracle",
+      "classification_samples": 300,
+      "classification_accuracy": 1.0,
+      "class_accuracy": {
+        "LEFT": 1.0,
+        "STAY": 1.0,
+        "RIGHT": 1.0
+      },
+      "confusion_matrix_rows_true_columns_predicted": [
+        [
+          100,
+          0,
+          0
+        ],
+        [
+          0,
+          100,
+          0
+        ],
+        [
+          0,
+          0,
+          100
+        ]
+      ],
+      "inference_latency": {
+        "median_ms": 0.0005830079317092896,
+        "p95_ms": 0.0006670597940683365
+      },
+      "games": 3,
+      "average_returns": 5.666666666666667,
+      "average_opponent_score": 0.3333333333333333,
+      "randomized_opening": true,
+      "average_score": 0,
+      "median_score": 0,
+      "best_score": 0,
+      "miss_rate_percent": 5.555555555555555,
+      "completed_games": 0,
+      "max_game_seconds": 20.0,
+      "opponent": "oracle, human paddle speed 560",
+      "decision_interval_ms": 100,
+      "simulated_inference_delay_ms": 0,
+      "seed": 2026
+    },
+    {
+      "model": "tiny_mlp",
+      "classification_samples": 30,
+      "classification_accuracy": 0.8,
+      "class_accuracy": {
+        "LEFT": 0.625,
+        "STAY": 1.0,
+        "RIGHT": 1.0
+      },
+      "confusion_matrix_rows_true_columns_predicted": [
+        [
+          10,
+          5,
+          1
+        ],
+        [
+          0,
+          10,
+          0
+        ],
+        [
+          0,
+          0,
+          4
+        ]
+      ],
+      "inference_latency": {
+        "median_ms": 0.014666002243757248,
+        "p95_ms": 0.016666017472743988
+      },
+      "games": 1,
+      "average_returns": 6,
+      "average_opponent_score": 0,
+      "randomized_opening": true,
+      "average_score": 0,
+      "median_score": 0,
+      "best_score": 0,
+      "miss_rate_percent": 0.0,
+      "completed_games": 0,
+      "max_game_seconds": 20.0,
+      "opponent": "oracle, human paddle speed 560",
+      "decision_interval_ms": 100,
+      "simulated_inference_delay_ms": 0.014666002243757248,
+      "seed": 2026
+    },
+    {
+      "model": "openjev",
+      "classification_samples": 30,
+      "classification_accuracy": 0.4666666666666667,
+      "class_accuracy": {
+        "LEFT": 0.5,
+        "STAY": 0.2,
+        "RIGHT": 1.0
+      },
+      "confusion_matrix_rows_true_columns_predicted": [
+        [
+          8,
+          0,
+          8
+        ],
+        [
+          1,
+          2,
+          7
+        ],
+        [
+          0,
+          0,
+          4
+        ]
+      ],
+      "inference_latency": {
+        "median_ms": 208.8144375011325,
+        "p95_ms": 269.73324990831316
+      },
+      "games": 1,
+      "average_returns": 4,
+      "average_opponent_score": 2,
+      "randomized_opening": true,
+      "average_score": 0,
+      "median_score": 0,
+      "best_score": 0,
+      "miss_rate_percent": 33.333333333333336,
+      "completed_games": 0,
+      "max_game_seconds": 20.0,
+      "opponent": "oracle, human paddle speed 560",
+      "decision_interval_ms": 100,
+      "simulated_inference_delay_ms": 208.8144375011325,
+      "seed": 2026
+    }
+  ]
+}

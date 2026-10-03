@@ -23,7 +23,7 @@ python -m pip install -r backend/requirements.txt
 npm --prefix frontend install
 ```
 
-Use Left/Right or A/D. Start begins a match; Restart starts a fresh match. Ball speed changes immediately. Touch devices also get hold-to-move controls.
+Use Left/Right or A/D. Start begins a match; Restart starts a fresh match. Pause/Resume or Space freezes and resumes the same rally, including the point timer. Space keeps native behavior in form controls and buttons. Ball speed changes immediately. Touch devices also get hold-to-move controls.
 
 ```sh
 npm run typecheck
@@ -60,13 +60,92 @@ For development without model inference:
 JEV_PROVIDER=mock make start
 ```
 
-The UI identifies the actual provider as **OpenJEV-style 0.8B** or **Mock** and retains its identity if inference becomes unavailable. `MockJevProvider` uses a deterministic paddle-relative dead zone and fixed heuristic confidence.
+The model selector offers **Jev 0.8B** and **Tiny MLP**; development Jev is explicitly labeled **Mock** and retains its identity if inference becomes unavailable. `MockJevProvider` uses a deterministic paddle-relative dead zone and fixed heuristic confidence.
 
-The endpoint accepts JSON with `ball_x`, `ball_y`, `ball_vx`, `ball_vy`, `jev_x`, `paddle_width`, `game_width`, and `game_height`. Positions are centers in court pixels; velocities are pixels/second, including the selected ball-speed multiplier (zero while a rally is paused). Responses contain `prediction`, `confidence`, server-side `latency_ms`, and `provider`. The browser owns physics, scoring, rendering, and human controls; Python only selects JEV decisions.
+The endpoint accepts JSON with `ball_x`, `ball_y`, `ball_vx`, `ball_vy`, `jev_x`, `paddle_width`, `game_width`, and `game_height`. Positions are centers in court pixels; velocities are pixels/second, including the selected ball-speed multiplier. Responses contain `prediction`, `confidence`, server-side `latency_ms`, and `provider`. The browser owns physics, scoring, rendering, and human controls; Python selects the chosen policy’s decisions. Inference requests run only during visible, active rallies. Pausing aborts the pending browser request and discards its response; a server forward already in progress may finish, but cannot alter the paused game. Resume keeps one existing animation loop.
 
 Backend checks (with the virtual environment active, from `backend/`):
 
 ```sh
 python -m compileall -q app
-python -m unittest discover -s tests
+PYTHONPATH=..:. python -m unittest discover -s tests
 ```
+
+
+## Tiny MLP training and evaluation
+
+Run from the repository root with the existing virtual environment (PyTorch is
+already in `backend/requirements.txt`):
+
+```sh
+.venv/bin/python training/generate_data.py --samples 100000 --seed 42
+.venv/bin/python training/train.py --epochs 80
+.venv/bin/python training/evaluate.py --samples 3000 --games 100 --simulate-latency
+.venv/bin/python training/evaluate.py --games 100 --random-start --simulate-latency --output models/stress-evaluation.json
+.venv/bin/python training/benchmark_http.py --samples 100
+```
+
+The HTTP benchmark requires a running backend and compares identical seeded
+states after five warmups per policy, using the UI's actual endpoints. It reports
+server inference and HTTP round-trip median and nearest-rank p95 separately.
+Model load time and the frontend's 100 ms scheduling interval are excluded.
+
+`training/simulator.py` mirrors the current 960×640 court, radius 9, paddle
+width 128, speeds 240/560, ball speed 330, 240 Hz physics steps, wall/paddle
+collisions, 0.9-second point timer and first-to-10 scoring. Seeded RNG replaces
+`Math.random`. The top oracle predicts contact at y=64, folds wall bounces,
+and uses a 15%-paddle-width dead zone. Away-going balls are tracked until the
+opponent changes their trajectory. Geometry follows this game's fixed paddles.
+The faster bottom paddle is controlled by the symmetric oracle in evaluations.
+
+The generator mixes randomized scenarios and short physics rollouts and uses
+rejection sampling to balance LEFT/STAY/RIGHT without changing oracle labels.
+CSV files contain raw state and integer labels (0/1/2); training normalizes them.
+The eight features, in order, are ball x/width, ball y/height, vx/width, vy/height,
+paddle center/width, paddle width/court width, court width/960, court height/640.
+Positions are centers and velocities are pixels/second. The browser implements
+the same normalization for Tiny MLP and submits it to `/predict/normalized`.
+Jev's existing raw-state `/predict` contract is preserved. Both implementations
+conform to `Policy.predict(GameState) -> Prediction`; register new factories in
+`backend/app/policies/` and add their UI options without changing physics.
+
+The network is 8→32→32→3 with ReLU hidden activations (1,443 parameters).
+Training uses Adam, CrossEntropyLoss, a seeded stratified 80/20 split and CPU
+execution. The checkpoint with best validation accuracy (validation loss breaks
+ties) is saved with feature order, action labels and normalization version.
+Evaluation generates an independent dataset by default; pass `--data` only for
+an independent test CSV. Per-class accuracy and the confusion matrix accompany
+match scores, return counts, miss rate and timeout counts. A zero score against
+the oracle can indicate an ongoing rally; inspect returns and completed matches.
+`--simulate-latency` delays actions by measured median inference time; it models
+a fixed delay rather than jitter or HTTP overhead. `--compare-jev` additionally
+runs real Jev on the same states and game seeds (default 30 states, 3 games;
+adjust `--jev-samples`, `--jev-games`, `--seconds` for expensive runs).
+
+Datasets, checkpoints, logs and evaluation artifacts in `data/` and `models/`
+are ignored by Git. The locally trained checkpoint is
+`models/keepup_mlp_v1.pt`; override its location with `TINY_MLP_PATH`.
+Missing/incompatible checkpoints return unavailable explicitly, with no policy
+substitution. A checkpoint created after backend startup loads on the first
+Tiny MLP request; restart the backend to load replacements of an existing model.
+`GET /policies` reports backend availability.
+
+Verification:
+
+```sh
+PYTHONPATH=backend:. .venv/bin/python -m unittest discover -s backend/tests
+npm --prefix frontend test
+npm --prefix frontend run build
+```
+
+An optional real-browser smoke check is `frontend/tests/browser-smoke.cjs`.
+With both services running, install Playwright in a temporary directory and run:
+
+```sh
+npm install --prefix /tmp/keepup-browser playwright
+PLAYWRIGHT_MODULE=/tmp/keepup-browser/node_modules/playwright CHROME_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" node frontend/tests/browser-smoke.cjs
+```
+
+It checks both real policies, frozen canvas and requests during pause, switching
+while paused, Space and a single game animation loop. Its screenshot goes to
+ignored `models/browser-smoke.png`.

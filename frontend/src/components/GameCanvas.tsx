@@ -43,7 +43,8 @@ export function GameCanvas({ engine, controller, onSnapshot, onInference }: Prop
         controller.resetPrediction();
         previousState = snapshot.state;
       }
-      if (!document.hidden) {
+      controller.setPaused(document.hidden || snapshot.state === 'PAUSED');
+      if (!document.hidden && snapshot.state === 'PLAYING') {
         const velocityScale = snapshot.state === 'PLAYING' ? snapshot.speed : 0;
         void controller.requestPrediction({
           ball_x: engine.ball.x,
@@ -74,12 +75,20 @@ export function GameCanvas({ engine, controller, onSnapshot, onInference }: Prop
       const target = event.target;
       if (target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName))) return;
       if (event.ctrlKey || event.metaKey || event.altKey) return;
+      if (event.key === ' ' && event.type === 'keydown' && !event.repeat && !(target instanceof HTMLElement && target.tagName === 'BUTTON')) {
+        event.preventDefault();
+        engine.togglePause();
+        controller.setPaused(engine.getSnapshot().state === 'PAUSED');
+        previousTime = null;
+        onSnapshot(engine.getSnapshot());
+        return;
+      }
       if (['arrowleft', 'arrowright', 'a', 'd'].includes(event.key.toLowerCase())) {
         event.preventDefault();
         engine.setKey(event.key, event.type === 'keydown');
       }
     };
-    const clearInput = () => { engine.clearInput(); controller.resetPrediction(); previousTime = null; };
+    const clearInput = () => { engine.clearInput(); controller.resetPrediction(); controller.setPaused(document.hidden || engine.getSnapshot().state === 'PAUSED'); previousTime = null; };
     window.addEventListener('keydown', onKey);
     window.addEventListener('keyup', onKey);
     window.addEventListener('blur', clearInput);

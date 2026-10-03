@@ -9,3 +9,6 @@ __pycache__/
 .env.local
 .cache/
 models/
+
+data/*.csv
+data/*.json

@@ -1,5 +1,5 @@
 import { predictState } from '../services/jevClient';
-import type { JevGameState } from '../services/jevClient';
+import type { JevGameState, PolicyId } from '../services/jevClient';
 import type { JevController } from './JevController';
 import type { JevDecision } from './types';
 
@@ -27,6 +27,8 @@ export class ApiJevController implements JevController {
   private readonly timeoutMs: number;
   private status = unavailable();
   private active = false;
+  private paused = false;
+  private model: PolicyId = 'jev';
   private inFlight = false;
   private lastInference = -Infinity;
   private generation = 0;
@@ -40,6 +42,23 @@ export class ApiJevController implements JevController {
 
   decide(): JevDecision { return this.status.prediction; }
   getStatus(): JevInferenceStatus { return { ...this.status }; }
+
+  getModel(): PolicyId { return this.model; }
+
+  setModel(model: PolicyId) {
+    if (model === this.model) return;
+    this.resetPrediction();
+    this.model = model;
+    this.status = unavailable(model === 'jev' ? 'openjev' : 'tiny_mlp');
+    this.lastInference = -Infinity;
+  }
+
+  setPaused(paused: boolean) {
+    if (this.paused === paused) return;
+    this.paused = paused;
+    this.resetPrediction();
+    this.lastInference = -Infinity;
+  }
 
   start() {
     this.active = true;
@@ -60,7 +79,7 @@ export class ApiJevController implements JevController {
   }
 
   async requestPrediction(state: JevGameState, time: number): Promise<void> {
-    if (!this.active || this.inFlight || time - this.lastInference < this.intervalMs) return;
+    if (!this.active || this.paused || this.inFlight || time - this.lastInference < this.intervalMs) return;
     this.lastInference = time;
     this.inFlight = true;
     const generation = this.generation;
@@ -69,8 +88,8 @@ export class ApiJevController implements JevController {
     const timeout = setTimeout(() => request.abort(), this.timeoutMs);
 
     try {
-      const result = await predictState(state, this.url, request.signal);
-      if (!this.active || generation !== this.generation) return;
+      const result = await predictState(state, this.url, request.signal, this.model);
+      if (!this.active || this.paused || generation !== this.generation) return;
       this.status = {
         connected: true, prediction: result.prediction,
         confidence: result.confidence, latencyMs: result.latency_ms, provider: result.provider,

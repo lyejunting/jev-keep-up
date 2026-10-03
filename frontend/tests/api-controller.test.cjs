@@ -115,3 +115,61 @@ test('continues using the last real model decision while a slower prediction is 
   assert.equal(controller.getStatus().connected, false);
   assert.equal(controller.getStatus().provider, 'openjev');
 });
+
+test('pause aborts outstanding inference, discards its result and sends nothing until resume', async t => {
+  let finish, signal;
+  let calls = 0;
+  const controller = setup(t, async (_url, options) => {
+    calls++; signal = options.signal;
+    return new Promise(resolve => { finish = resolve; });
+  });
+  const pending = controller.requestPrediction(state, 0);
+  controller.setPaused(true);
+  assert.equal(signal.aborted, true);
+  finish(response('LEFT'));
+  await pending;
+  for (let time = 100; time < 1000; time += 100) await controller.requestPrediction(state, time);
+  assert.equal(calls, 1);
+  assert.equal(controller.decide(), 'STAY');
+  controller.setPaused(false);
+  const resumed = controller.requestPrediction(state, 1000);
+  finish(response('RIGHT'));
+  await resumed;
+  assert.equal(calls, 2);
+  assert.equal(controller.decide(), 'RIGHT');
+});
+
+test('model switching discards old results and sends the training normalization to Tiny MLP', async t => {
+  let finish;
+  const requests = [];
+  const controller = setup(t, async (url, options) => {
+    requests.push({ url, body: JSON.parse(options.body) });
+    return new Promise(resolve => { finish = resolve; });
+  });
+  const old = controller.requestPrediction(state, 0);
+  controller.setModel('tiny_mlp');
+  finish(response('LEFT'));
+  await old;
+  assert.equal(controller.decide(), 'STAY');
+  assert.equal(controller.getStatus().provider, 'tiny_mlp');
+  const tiny = controller.requestPrediction(state, 100);
+  assert.equal(requests[1].url, 'http://127.0.0.1:8000/predict/normalized');
+  assert.deepEqual(requests[1].body, { model: 'tiny_mlp', features: [420/800, 180/600, -2.5/800, 4.2/600, 550/800, 80/800, 800/960, 600/640] });
+  finish(new Response(JSON.stringify({ prediction: 'RIGHT', confidence: 0.9, latency_ms: 0.2, provider: 'tiny_mlp' })));
+  await tiny;
+  assert.equal(controller.decide(), 'RIGHT');
+  controller.setModel('jev');
+  const jev = controller.requestPrediction(state, 200);
+  assert.deepEqual(requests[2].body, state);
+  finish(response('LEFT')); await jev;
+  assert.equal(controller.decide(), 'LEFT');
+});
+
+test('switching a policy while paused cannot start inference', async t => {
+  let calls = 0;
+  const controller = setup(t, async () => { calls++; return response(); });
+  controller.setPaused(true);
+  controller.setModel('tiny_mlp');
+  await controller.requestPrediction(state, 0);
+  assert.equal(calls, 0);
+});
