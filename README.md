@@ -2,21 +2,25 @@
 
 React + TypeScript + Canvas, with a FastAPI decision service. Human paddle at the bottom, JEV at the top. First to 10 wins.
 
-Start the backend (Python 3.10+; the first start downloads the model into the ignored `.cache/huggingface/`):
+Start the whole program from the project root:
+
+```sh
+make start
+```
+
+The command automatically stops any process listening on ports 8000 or 5173, waits up to 10 seconds for the ports to become free, then starts both services. To free the ports without restarting, run `make stop`.
+
+Open http://127.0.0.1:5173/ once the services are ready. Press Ctrl+C to stop both services. If either service exits, the script stops the other. The first start downloads the model into the ignored `.cache/huggingface/`.
+
+The launcher checks Node compatibility before starting either service and prints the selected version. If your terminal selects an incompatible Node, it also checks the standard Homebrew locations. To choose an executable explicitly, run `NODE_BIN=/opt/homebrew/bin/node make start` (adjust the path for your installation). Errors such as `crypto.getRandomValues is not a function` indicate an incompatible runtime.
+
+One-time setup (Make, Python 3.10+ and Node.js 20.19+ or 22.12+):
 
 ```sh
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r backend/requirements.txt
-python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
-```
-
-In another terminal, start the frontend:
-
-```sh
-cd frontend
-npm install
-npm run dev
+npm --prefix frontend install
 ```
 
 Use Left/Right or A/D. Start begins a match; Restart starts a fresh match. Ball speed changes immediately. Touch devices also get hold-to-move controls.
@@ -53,7 +57,7 @@ All 24 decisions were unchanged; maximum confidence difference was 0.00000301 fr
 For development without model inference:
 
 ```sh
-JEV_PROVIDER=mock python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
+JEV_PROVIDER=mock make start
 ```
 
 The UI identifies the actual provider as **OpenJEV-style 0.8B** or **Mock** and retains its identity if inference becomes unavailable. `MockJevProvider` uses a deterministic paddle-relative dead zone and fixed heuristic confidence.
