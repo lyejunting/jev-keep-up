@@ -1,228 +1,85 @@
-# Keep-Up implementation and measured results
+# Keep-Up results
 
-Measured locally on 2026-10-03. Jev uses Apple Metal (MPS), float32, the original
-pinned checkpoint and shared-prefix adapter. The latency table below measures
-the retained CPU PyTorch Tiny MLP endpoint. The game now runs Tiny MLP in
-TypeScript in the browser; those historical backend timings are not browser
-latency measurements.
+Measured locally on **3 October 2026**.
 
-## Latency benchmark
+The public game uses **Tiny MLP in the browser**. Local development also supports **Jev 0.8B through Python**.
 
-100 identical seeded states per policy, five warmups each, sequential local HTTP
-requests and no concurrent game inference. Seed 2026. p95 is nearest rank.
+## Tiny MLP training and holdout
 
-| Model | Server median | Server p95 | HTTP round-trip median | HTTP round-trip p95 |
+The model has **1,443 parameters**: 8 inputs, two 32-neuron hidden layers with ReLU, and 3 action outputs.
+
+We generated **30,000 examples**, balanced equally across LEFT, STAY, and RIGHT. A deterministic oracle supplies the labels. Training used Adam and CrossEntropyLoss for 100 epochs; the best checkpoint was from epoch 93.
+
+| Dataset | Samples | Accuracy |
+| --- | ---: | ---: |
+| Training — 80% | 24,000 | 88.92% |
+| Validation holdout — 20% | 6,000 | 88.07% |
+| Independent test | 3,000 | 89.37% |
+
+Validation selects the best checkpoint. The independent test contains separately generated states unused during training or checkpoint selection.
+
+## Jev versus Tiny MLP success
+
+| Measure | Jev 0.8B | Tiny MLP |
+| --- | ---: | ---: |
+| Oracle action agreement | 46.7% — 14/30 | 80.0% — 24/30 |
+| Paddle return success | 66.7% — 4/6 | 100.0% — 6/6 |
+| Completed-match win rate | Not available | Not available |
+
+**Oracle agreement** measures how often the model chooses the oracle's action. Both models were tested on the same 30 states.
+
+**Paddle return success** measures hits divided by hits plus misses. Each model played a separate 20-second simulation against the same oracle opponent, starting from the same randomized opening seed. Decisions included each model's measured median inference delay.
+
+This is a small comparison: only six paddle encounters per model. Neither match finished, so these results do not establish a match win rate.
+
+### Larger Tiny MLP gameplay test
+
+Across **100 randomized-opening simulations**, each capped at 120 seconds:
+
+| Metric | Tiny MLP |
+| --- | ---: |
+| Paddle return success | 99.33% |
+| Average paddle returns | 35.74 |
+| Average score | 0.12 |
+| Median / best score | 0 / 1 |
+| Completed matches | 0 |
+
+The opponent was the faster bottom-paddle oracle. Most play continued as rallies rather than completed matches. Jev has not been tested on this larger set, so it is not a direct comparison with Jev's figures above.
+
+## Latency
+
+Both backend policies were measured on **100 identical states**, after five warmup requests per model. Jev ran on Apple Metal; the Python Tiny MLP ran on CPU.
+
+| Model | Inference median | Inference p95 | HTTP median | HTTP p95 |
 | --- | ---: | ---: | ---: | ---: |
 | Jev 0.8B | 207.00 ms | 214.63 ms | 208.53 ms | 216.15 ms |
-| Tiny MLP | 0.04 ms | 0.06 ms | 0.66 ms | 0.98 ms |
+| Tiny MLP — Python | 0.04 ms | 0.06 ms | 0.66 ms | 0.98 ms |
 
-Server latency measures `predict` including state preprocessing, tensor creation,
-forward pass and confidence extraction. It excludes model loading, HTTP
-transport and the browser's 100 ms scheduling interval; the API rounds it to
-0.01 ms. Jev's CPU probability copy synchronizes Metal before returning.
-HTTP round-trip includes serialization, request handling and response reading.
-These are measurements on this machine, not guaranteed rates elsewhere.
+**These are backend measurements, not browser latency measurements.** Inference excludes model loading and HTTP transport. HTTP timing includes the local request and response. Neither includes the game's 100 ms decision interval.
 
-Reproduce with both services running:
+To repeat the benchmark with the backend running:
 
 ```sh
 .venv/bin/python training/benchmark_http.py --samples 100
 ```
 
-Detailed aggregate measurements are retained in `training/results.json`.
-The full local benchmark is `models/http-benchmark.json`.
+## Browser version
 
-## Browser-only deployment
+The exported MLP weights occupy approximately **30 KB of JSON** and are bundled with the frontend. Gameplay requires no backend requests.
 
-The public build is ready for static hosting on Netlify:
+On **3,000 independent states**, browser inference chose the same action as PyTorch **100% of the time**. Its oracle agreement remained **89.37%**.
 
-```sh
-npm --prefix frontend run build:static
-```
+Browser latency is displayed in the game; a desktop and mobile latency benchmark is still needed.
 
-Upload the entire **`frontend/dist/` folder**, including `index.html` and `assets/`.
-Tiny MLP is the only public model and evaluates inside the browser with no backend
-requests. `netlify.toml` also configures a Node-only Git-based build. Development
-keeps both Jev (backend) and Tiny MLP (browser); `build:local` writes the separate
-`frontend/dist-local/` directory.
+## Verification and next step
 
-The original best checkpoint was exported to
-`frontend/src/models/keepup_mlp_v1.json` (29,544 bytes of JSON; 1,443 parameters).
-The three dense layers, ReLU activations and stable softmax use TypeScript with
-float32 layer outputs. This small asset is committed and bundled into the app;
-players do not need PyTorch, ONNX, GPU support or an API key.
+The last implementation checks passed:
 
-Parity against PyTorch on the same 3,000 independent test states:
+- **22 frontend tests** and **16 backend tests**.
+- Static and local production builds.
+- Browser-only gameplay, pause/resume, and restart with **zero backend requests**.
+- Local switching between real Jev and browser Tiny MLP, including switching while paused.
 
-| Metric | Browser result |
-| --- | ---: |
-| Action agreement with PyTorch | 100.0% (3,000/3,000) |
-| Oracle action accuracy | 89.37% |
-| Maximum absolute logits difference | 0.00001526 |
-| Maximum absolute confidence difference | 0.00000226 |
+The next useful evaluation is a larger comparison using the same game seeds for both models, with completed wins, losses, and timeouts reported separately.
 
-These are floating-point numerical differences; none changed the selected action.
-The static-build Chrome smoke check blocks all backend and external requests,
-then verifies playing, paused canvas pixels, resume and restart with zero backend
-requests and no browser errors. Browser inference latency is shown in the game
-and needs its own device-specific benchmark; use the earlier table only for the
-backend implementation.
-
-## Jev 0.8B versus Tiny MLP success rates
-
-Two success measures are available from the existing comparison: choosing the
-oracle's action and returning an incoming ball. Match win rate requires completed
-matches and is not yet available.
-
-| Success measure | Jev 0.8B | Our Tiny MLP | Evaluation size |
-| --- | ---: | ---: | --- |
-| Oracle action agreement | 46.7% (14/30) | 80.0% (24/30) | Same 30 independent states |
-| Paddle return success | 66.7% (4/6) | 100.0% (6/6) | One 20-second simulation per policy, same opening seed |
-| Completed-match win rate | Not available | Not available | Neither match reached 10 points |
-
-Oracle action agreement is correct predictions / evaluated states. Paddle return
-success is hits / (hits + misses), equivalent to 100% minus miss rate. Each policy
-plays separately against the same bottom oracle; this is not a head-to-head match
-between Jev and Tiny MLP. Both use a 100 ms decision interval with their measured
-median inference delay. Their subsequent trajectories differ as their actions
-change paddle collisions.
-
-These results favor Tiny MLP in this small comparison, but six paddle encounters
-per policy are too few to establish a reliable gameplay success rate. Tiny MLP's
-larger independent test scored 89.37% oracle agreement over 3,000 states and
-99.33% paddle return success across 100 randomized-opening simulations. Jev has
-not been evaluated at those larger sample sizes, so those figures should not be
-compared directly with its small-sample results. A stronger comparison should run
-both policies over the same larger set of seeds and report completed wins,
-losses and timeouts separately.
-
-## Architecture and behavior
-
-- Existing ball motion, collision rules, paddle speeds and scoring are preserved.
-- Engine pause saves PLAYING/POINT_SCORED and freezes all updates and the point
-  timer. Resume continues that state. Restart clears the paused state.
-- Pause and Space suspend inference requests, abort the browser request and
-  invalidate late results. A backend forward already running may finish;
-  cancellation cannot suspend a PyTorch forward. It cannot change the paused
-  game or queue a second forward for the same policy.
-- One canvas animation loop remains active for rendering while paused; repeated
-  pause/resume never starts another loop. Hidden documents issue no inference.
-- Policy selection resets only cached AI decisions, preserving match state.
-  Backend `Policy.predict(GameState) -> Prediction` and frontend
-  `PolicyController.decide()` separate inference from game physics.
-- Jev remains in `backend/app/inference.py`, re-exported from `policies/jev.py`.
-  Its prompt, model, confidence adapter and caching are unchanged.
-- Tiny MLP uses a versioned eight-feature normalization shared by Python training
-  and TypeScript inference. Browser Tiny evaluates those features locally;
-  `/predict/normalized` remains for PyTorch backend comparisons.
-  The original raw `/predict` endpoint continues to default to Jev.
-- Checkpoints validate feature/action metadata. Missing weights are reported as
-  unavailable without substitution. The backend can load newly created Tiny
-  weights on its first request. Replacing already-loaded weights needs a restart.
-- The deterministic oracle folds predicted top-paddle contact x through wall
-  bounces. It is independent of the network. The seeded simulator mirrors the
-  frontend rules and controls the bottom paddle with a symmetric oracle.
-
-## Training
-
-30,000 samples, seed 42, exactly 10,000 LEFT / 10,000 STAY / 10,000 RIGHT.
-Candidates combine randomized numerical states and short physics rollouts;
-rejection sampling balances classes without modifying labels.
-
-Network: 8 → 32 + ReLU → 32 + ReLU → 3, **1,443 parameters**.
-Adam (learning rate 0.002), CrossEntropyLoss, batch size 256, 100 CPU epochs.
-Seeded stratified split: 24,000 training / 6,000 validation examples.
-Best checkpoint: epoch 93, selected by validation accuracy with loss as tie-breaker.
-
-| Metric | Result |
-| --- | ---: |
-| Training accuracy | 88.92% |
-| Validation accuracy | 88.07% |
-| Training loss | 0.27611 |
-| Validation loss | 0.29089 |
-| Independent test accuracy (3,000 samples, seed 2026) | 89.37% |
-| LEFT / STAY / RIGHT test accuracy | 88.10% / 89.70% / 90.30% |
-
-Confusion matrix (rows true LEFT/STAY/RIGHT; columns predicted LEFT/STAY/RIGHT):
-
-```text
-881   89   30
- 28  897   75
-  9   88  903
-```
-
-Weights: `models/keepup_mlp_v1.pt`; metadata: `models/keepup_mlp_v1.json`.
-Datasets, weights and local logs are ignored by Git; the files exist locally.
-
-## Gameplay evaluation
-
-100 seeds, at most 120 simulated seconds per game, first-to-10, original paddle
-speeds, 100 ms decision interval, faster bottom oracle opponent. Tiny actions
-are delayed by measured median direct inference latency (~0.014 ms). Delays
-are fixed medians and do not model HTTP overhead or jitter.
-
-| Opening / policy | Average score | Median score | Best score | Average returns | Miss rate |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| Standard serves / Tiny MLP | 0 | 0 | 0 | 36.03 | 0.00% |
-| Standard serves / Oracle | 0 | 0 | 0 | 36.79 | 0.00% |
-| Randomized opening / Tiny MLP | 0.12 | 0 | 1 | 35.74 | 0.67% |
-| Randomized opening / Oracle | 0.12 | 0 | 1 | 36.36 | 0.60% |
-
-No match reached 10 points within 120 seconds. Zero scores in standard openings
-reflect sustained rallies, not completed wins. Miss rate is top-paddle misses /
-(top-paddle hits + misses). Randomized openings can include initially difficult
-or unreachable trajectories; they are a stress test rather than normal serves.
-
-A limited real-Jev comparison used 30 identical test states and one identical
-20-second randomized game seed per policy. Tiny had 6 returns, zero misses and
-score 0; Jev had 4 returns, 2 misses and score 0 (33.3% miss rate). Neither match
-completed. On that small classification subset, Tiny matched the oracle 80.0%
-and Jev 46.7%. This single short game is insufficient for broad gameplay claims.
-The direct comparison measured Jev 208.81 ms median / 269.73 ms p95; the larger
-100-request HTTP benchmark above is the primary latency comparison.
-
-## Verification
-
-- All 22 frontend tests pass, including pause physics, point timers, restart,
-  inference cancellation, response invalidation, model switching, browser
-  numerical parity and rejecting Jev in browser-only controllers.
-- All 16 backend tests pass, including existing Jev behavior, seeded generation,
-  class balance, oracle wall bounces, simulator collisions, checkpoint metadata,
-  normalized endpoint equivalence and missing-model behavior.
-- Production frontend build and `git diff --check` pass.
-- Headless Chrome played both actual policies through the running application.
-  It confirmed unchanged canvas pixels and zero new inference requests during
-  pause, switching while paused, Space shortcuts, repeated resume and one game
-  animation loop. No browser errors. Screenshot: `models/browser-smoke.png`.
-
-## Files changed
-
-Backend:
-`backend/app/main.py`, `backend/app/schemas.py`,
-`backend/app/policies/{__init__,base,jev,tiny_mlp}.py`,
-`backend/tests/test_training.py`.
-
-Training:
-`training/{__init__,oracle,simulator,generate_data,train,evaluate,benchmark_http}.py`,
-`training/{export_browser,verify_browser}.py`, `training/RESULTS.md`, `training/results.json`.
-
-Frontend:
-`frontend/src/components/{Game,GameCanvas}.tsx`,
-`frontend/src/game/{ApiJevController,GameEngine,JevController,types}.ts`,
-`frontend/src/services/jevClient.ts`, `frontend/src/services/tinyMlp.ts`,
-`frontend/src/models/keepup_mlp_v1.json`, `frontend/src/config.ts`,
-`frontend/src/styles.css`,
-`frontend/tests/{api-controller.test,game.test,tiny-mlp.test,browser-smoke,browser-static-smoke}.cjs`,
-`frontend/tests/fixtures/tiny-mlp.json`, `frontend/vite.config.ts`,
-`frontend/{package,tsconfig,tsconfig.test}.json`, `frontend/src/vite-env.d.ts`.
-
-Documentation/artifacts: `README.md`, `.gitignore`, `netlify.toml`; locally generated ignored
-`data/training.{csv,json}` and `models/` checkpoints, logs and evaluation files.
-
-## Next optimization
-
-Tiny MLP now bypasses HTTP inference in the game. The existing 100 ms request
-interval still limits decision frequency; benchmark faster scheduling separately
-before changing it. Improve imitation data with longer policy rollouts and hard
-bounce scenarios, then evaluate many completed matches across speeds and
-opponents. Keep Jev's current behavior for comparison. Browser inference uses TypeScript; ONNX has not been introduced.
+Detailed measurements are in [results.json](results.json). Setup and static upload instructions are in the [README](../README.md).
