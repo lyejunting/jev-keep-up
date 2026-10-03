@@ -12,3 +12,10 @@ models/
 
 data/*.csv
 data/*.json
+
+dist-local/
+
+# Browser deployment needs this small exported model in Git.
+!frontend/src/models/
+!frontend/src/models/keepup_mlp_v1.json
+/frontend/keepup-browser-only.zip

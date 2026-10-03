@@ -2,12 +2,15 @@ import { useState } from 'react';
 import { GameEngine } from '../game/GameEngine';
 import { ApiJevController } from '../game/ApiJevController';
 import { BALL_SPEEDS } from '../game/types';
-import { POLICY_OPTIONS } from '../services/jevClient';
+import { availablePolicies, initialModel, gamePredictor } from '../config';
 import type { PolicyId } from '../services/jevClient';
 import { GameCanvas } from './GameCanvas';
 
 export function Game() {
   const [controller] = useState(() => new ApiJevController({
+    initialModel,
+    allowedModels: availablePolicies.map(option => option.id),
+    predictor: gamePredictor,
     url: import.meta.env.VITE_JEV_API_URL || undefined,
     intervalMs: Number(import.meta.env.VITE_JEV_INFERENCE_INTERVAL_MS ?? 100),
     timeoutMs: Number(import.meta.env.VITE_JEV_REQUEST_TIMEOUT_MS ?? 30000),
@@ -15,8 +18,8 @@ export function Game() {
   const [engine] = useState(() => new GameEngine(controller));
   const [snapshot, setSnapshot] = useState(() => engine.getSnapshot());
   const [inference, setInference] = useState(() => controller.getStatus());
-  const [model, setModel] = useState<PolicyId>('jev');
-  const modelLabel = POLICY_OPTIONS.find(option => option.id === model)!.label;
+  const [model, setModel] = useState<PolicyId>(initialModel);
+  const modelLabel = availablePolicies.find(option => option.id === model)!.label;
   const togglePause = () => { engine.togglePause(); controller.setPaused(engine.getSnapshot().state === 'PAUSED'); setSnapshot(engine.getSnapshot()); };
   const { state, humanScore, jevScore, speed, winner, lastScorer } = snapshot;
   const decision = inference.prediction;
@@ -67,16 +70,16 @@ export function Game() {
             <select id="policy" className="policy-select" value={model} onChange={event => {
               const selected = event.target.value as PolicyId;
               controller.setModel(selected); setModel(selected); setInference(controller.getStatus());
-            }}>{POLICY_OPTIONS.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}</select>
+            }}>{availablePolicies.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}</select>
           </section>
           <section className="panel jev-panel">
-            <div className="panel-heading"><p className="eyebrow">AI DECISION</p><span className="mock-badge">API</span></div>
+            <div className="panel-heading"><p className="eyebrow">AI DECISION</p><span className="mock-badge">{model === 'tiny_mlp' ? 'BROWSER' : 'API'}</span></div>
             <div className="decision"><span className="decision-icon">{decisionIcon}</span><div><small>CURRENT DECISION</small><strong>{decision}</strong></div><span className={`thinking-dot ${inference.connected ? '' : 'unavailable'}`} /></div>
             <dl className="inference-metrics">
               <div><dt>Model</dt><dd className="model-name">{inference.provider === 'mock' ? 'Mock (Jev development mode)' : modelLabel}</dd></div>
               <div><dt>Status</dt><dd>{state === 'PAUSED' ? 'Paused' : inference.connected ? 'Connected' : 'Unavailable'}</dd></div>
               <div><dt>Confidence</dt><dd>{inference.confidence === null ? '—' : `${Math.round(inference.confidence * 100)}%`}</dd></div>
-              <div><dt>Inference</dt><dd>{inference.latencyMs === null ? '—' : `${inference.latencyMs.toFixed(1)} ms`}</dd></div>
+              <div><dt>Inference</dt><dd>{inference.latencyMs === null ? '—' : `${inference.latencyMs.toFixed(model === 'tiny_mlp' ? 3 : 1)} ms`}</dd></div>
             </dl>
             <p className="helper">{inference.connected ? 'A rival tracking the ball, one move at a time.' : 'Inference unavailable. The AI stays still; you can keep playing.'}</p>
           </section>

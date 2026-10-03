@@ -1,0 +1,7 @@
+[build]
+  base = "frontend"
+  command = "npm run build:static"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"

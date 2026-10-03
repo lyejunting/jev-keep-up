@@ -45,6 +45,9 @@ const assert = require('node:assert/strict');
     assert.equal(requests, pausedRequests, 'switching model while paused must not infer');
     await page.getByRole('button', { name: 'Resume', exact: true }).last().click();
     await waitConnected('Tiny MLP');
+    const tinyRequests = requests;
+    await page.waitForTimeout(300);
+    assert.equal(requests, tinyRequests, 'Tiny MLP runs locally without API requests');
     for (let i = 0; i < 5; i++) {
       await page.getByRole('button', { name: 'Pause', exact: true }).click();
       await page.getByRole('button', { name: 'Resume', exact: true }).last().click();

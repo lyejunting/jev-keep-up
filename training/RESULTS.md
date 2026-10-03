@@ -1,7 +1,10 @@
 # Keep-Up implementation and measured results
 
 Measured locally on 2026-10-03. Jev uses Apple Metal (MPS), float32, the original
-pinned checkpoint and shared-prefix adapter. Tiny MLP runs on CPU.
+pinned checkpoint and shared-prefix adapter. The latency table below measures
+the retained CPU PyTorch Tiny MLP endpoint. The game now runs Tiny MLP in
+TypeScript in the browser; those historical backend timings are not browser
+latency measurements.
 
 ## Latency benchmark
 
@@ -28,6 +31,42 @@ Reproduce with both services running:
 
 Detailed aggregate measurements are retained in `training/results.json`.
 The full local benchmark is `models/http-benchmark.json`.
+
+## Browser-only deployment
+
+The public build is ready for static hosting on Netlify:
+
+```sh
+npm --prefix frontend run build:static
+```
+
+Upload the entire **`frontend/dist/` folder**, including `index.html` and `assets/`.
+Tiny MLP is the only public model and evaluates inside the browser with no backend
+requests. `netlify.toml` also configures a Node-only Git-based build. Development
+keeps both Jev (backend) and Tiny MLP (browser); `build:local` writes the separate
+`frontend/dist-local/` directory.
+
+The original best checkpoint was exported to
+`frontend/src/models/keepup_mlp_v1.json` (29,544 bytes of JSON; 1,443 parameters).
+The three dense layers, ReLU activations and stable softmax use TypeScript with
+float32 layer outputs. This small asset is committed and bundled into the app;
+players do not need PyTorch, ONNX, GPU support or an API key.
+
+Parity against PyTorch on the same 3,000 independent test states:
+
+| Metric | Browser result |
+| --- | ---: |
+| Action agreement with PyTorch | 100.0% (3,000/3,000) |
+| Oracle action accuracy | 89.37% |
+| Maximum absolute logits difference | 0.00001526 |
+| Maximum absolute confidence difference | 0.00000226 |
+
+These are floating-point numerical differences; none changed the selected action.
+The static-build Chrome smoke check blocks all backend and external requests,
+then verifies playing, paused canvas pixels, resume and restart with zero backend
+requests and no browser errors. Browser inference latency is shown in the game
+and needs its own device-specific benchmark; use the earlier table only for the
+backend implementation.
 
 ## Jev 0.8B versus Tiny MLP success rates
 
@@ -74,7 +113,8 @@ losses and timeouts separately.
 - Jev remains in `backend/app/inference.py`, re-exported from `policies/jev.py`.
   Its prompt, model, confidence adapter and caching are unchanged.
 - Tiny MLP uses a versioned eight-feature normalization shared by Python training
-  and TypeScript inference. `/predict/normalized` carries those features.
+  and TypeScript inference. Browser Tiny evaluates those features locally;
+  `/predict/normalized` remains for PyTorch backend comparisons.
   The original raw `/predict` endpoint continues to default to Jev.
 - Checkpoints validate feature/action metadata. Missing weights are reported as
   unavailable without substitution. The backend can load newly created Tiny
@@ -143,8 +183,9 @@ The direct comparison measured Jev 208.81 ms median / 269.73 ms p95; the larger
 
 ## Verification
 
-- All 19 frontend tests pass, including pause physics, point timers, restart,
-  inference cancellation, response invalidation and model switching.
+- All 22 frontend tests pass, including pause physics, point timers, restart,
+  inference cancellation, response invalidation, model switching, browser
+  numerical parity and rejecting Jev in browser-only controllers.
 - All 16 backend tests pass, including existing Jev behavior, seeded generation,
   class balance, oracle wall bounces, simulator collisions, checkpoint metadata,
   normalized endpoint equivalence and missing-model behavior.
@@ -163,22 +204,25 @@ Backend:
 
 Training:
 `training/{__init__,oracle,simulator,generate_data,train,evaluate,benchmark_http}.py`,
-`training/RESULTS.md`, `training/results.json`.
+`training/{export_browser,verify_browser}.py`, `training/RESULTS.md`, `training/results.json`.
 
 Frontend:
 `frontend/src/components/{Game,GameCanvas}.tsx`,
 `frontend/src/game/{ApiJevController,GameEngine,JevController,types}.ts`,
-`frontend/src/services/jevClient.ts`, `frontend/src/styles.css`,
-`frontend/tests/{api-controller.test,game.test,browser-smoke}.cjs`.
+`frontend/src/services/jevClient.ts`, `frontend/src/services/tinyMlp.ts`,
+`frontend/src/models/keepup_mlp_v1.json`, `frontend/src/config.ts`,
+`frontend/src/styles.css`,
+`frontend/tests/{api-controller.test,game.test,tiny-mlp.test,browser-smoke,browser-static-smoke}.cjs`,
+`frontend/tests/fixtures/tiny-mlp.json`, `frontend/vite.config.ts`,
+`frontend/{package,tsconfig,tsconfig.test}.json`, `frontend/src/vite-env.d.ts`.
 
-Documentation/artifacts: `README.md`, `.gitignore`; locally generated ignored
+Documentation/artifacts: `README.md`, `.gitignore`, `netlify.toml`; locally generated ignored
 `data/training.{csv,json}` and `models/` checkpoints, logs and evaluation files.
 
 ## Next optimization
 
-HTTP overhead now exceeds Tiny's forward time. The existing 100 ms request
+Tiny MLP now bypasses HTTP inference in the game. The existing 100 ms request
 interval still limits decision frequency; benchmark faster scheduling separately
 before changing it. Improve imitation data with longer policy rollouts and hard
 bounce scenarios, then evaluate many completed matches across speeds and
-opponents. Keep Jev's current behavior for comparison. Browser inference / ONNX
-has not been introduced.
+opponents. Keep Jev's current behavior for comparison. Browser inference uses TypeScript; ONNX has not been introduced.

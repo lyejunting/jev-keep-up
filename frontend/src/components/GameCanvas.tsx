@@ -106,6 +106,6 @@ export function GameCanvas({ engine, controller, onSnapshot, onInference }: Prop
   }, [engine, controller, onSnapshot, onInference]);
 
   return <canvas ref={canvasRef} width={COURT.width} height={COURT.height}
-    aria-label="Game court. You control the bottom paddle; JEV controls the top paddle. Use Left and Right arrows or A and D."
+    aria-label="Game court. You control the bottom paddle; the selected AI controls the top paddle. Use Left and Right arrows or A and D."
     role="img" />;
 }

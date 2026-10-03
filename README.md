@@ -1,6 +1,32 @@
 # JEV Keep Up
 
-React + TypeScript + Canvas, with a FastAPI decision service. Human paddle at the bottom, JEV at the top. First to 10 wins.
+React + TypeScript + Canvas. Tiny MLP runs entirely in the browser; local development also offers Jev through FastAPI. Human paddle at the bottom, AI at the top. First to 10 wins.
+
+## Browser-only site for Netlify
+
+Build from the repository root (requires the Node version listed below):
+
+```sh
+npm --prefix frontend run build:static
+```
+
+**Upload the entire `frontend/dist/` folder to Netlify Drop.** It contains
+`index.html` and `assets/`; uploading only the HTML file will not work. This is a
+static browser-only build: Tiny MLP is the only model option, its weights are
+bundled with JavaScript, and play makes no backend requests. No Python service,
+model download or API key is needed for players. Use Netlify to serve the folder
+over HTTP/HTTPS rather than opening `index.html` directly with `file://`.
+See [Netlify's manual deployment instructions](https://docs.netlify.com/deploy/create-deploys/#drag-and-drop).
+
+For Git-based Netlify deployment, the root `netlify.toml` sets the base directory
+to `frontend`, build command to `npm run build:static`, publish directory to
+`dist`, and Node to 22. The committed exported weights make this a Node-only
+build; Netlify does not need the ignored PyTorch checkpoint or training dataset.
+
+`npm --prefix frontend run build` also creates the browser-only `dist/` build.
+To test it locally, use `npm --prefix frontend run preview`.
+
+## Local development with both models
 
 Start the whole program from the project root:
 
@@ -31,7 +57,7 @@ npm test
 npm run build
 ```
 
-The frontend sends structured game state to `POST http://127.0.0.1:8000/predict`, with a 100 ms minimum interval between request starts and only one request pending. Actual inference frequency depends on model latency. The last valid decision remains active while a prediction runs; requests time out after 30 seconds. Backend failures clear JEV to `STAY` and show Unavailable; the match continues and inference retries automatically. No images or base64 are sent. Predictions from a previous round or restart are discarded. The backend rejects overlapping forward passes rather than queuing them, including work still running after an HTTP cancellation.
+For Jev, the frontend sends structured game state to `POST http://127.0.0.1:8000/predict`, with a 100 ms minimum interval between request starts and only one request pending. Actual inference frequency depends on model latency. The last valid decision remains active while a prediction runs; requests time out after 30 seconds. Backend failures clear JEV to `STAY` and show Unavailable; the match continues and inference retries automatically. No images or base64 are sent. Predictions from a previous round or restart are discarded. The backend rejects overlapping forward passes rather than queuing them, including work still running after an HTTP cancellation.
 
 To configure the endpoint or inference interval, copy `frontend/.env.example` to `frontend/.env.local`, edit the values, and restart Vite. The backend allows local Vite origins on port 5173.
 
@@ -60,9 +86,9 @@ For development without model inference:
 JEV_PROVIDER=mock make start
 ```
 
-The model selector offers **Jev 0.8B** and **Tiny MLP**; development Jev is explicitly labeled **Mock** and retains its identity if inference becomes unavailable. `MockJevProvider` uses a deterministic paddle-relative dead zone and fixed heuristic confidence.
+The local model selector offers **Jev 0.8B** and **Tiny MLP**; development Jev is explicitly labeled **Mock** and retains its identity if inference becomes unavailable. `MockJevProvider` uses a deterministic paddle-relative dead zone and fixed heuristic confidence.
 
-The endpoint accepts JSON with `ball_x`, `ball_y`, `ball_vx`, `ball_vy`, `jev_x`, `paddle_width`, `game_width`, and `game_height`. Positions are centers in court pixels; velocities are pixels/second, including the selected ball-speed multiplier. Responses contain `prediction`, `confidence`, server-side `latency_ms`, and `provider`. The browser owns physics, scoring, rendering, and human controls; Python selects the chosen policy’s decisions. Inference requests run only during visible, active rallies. Pausing aborts the pending browser request and discards its response; a server forward already in progress may finish, but cannot alter the paused game. Resume keeps one existing animation loop.
+The endpoint accepts JSON with `ball_x`, `ball_y`, `ball_vx`, `ball_vy`, `jev_x`, `paddle_width`, `game_width`, and `game_height`. Positions are centers in court pixels; velocities are pixels/second, including the selected ball-speed multiplier. Responses contain `prediction`, `confidence`, server-side `latency_ms`, and `provider`. The browser owns physics, scoring, rendering, and human controls; Python selects Jev decisions. Tiny MLP computes its decisions in TypeScript using the same normalized numerical state. Inference requests run only during visible, active rallies. Pausing aborts the pending browser request and discards its response; a server forward already in progress may finish, but cannot alter the paused game. Resume keeps one existing animation loop.
 
 Backend checks (with the virtual environment active, from `backend/`):
 
@@ -86,7 +112,8 @@ already in `backend/requirements.txt`):
 ```
 
 The HTTP benchmark requires a running backend and compares identical seeded
-states after five warmups per policy, using the UI's actual endpoints. It reports
+states after five warmups per policy, using the backend endpoints. This measures
+the retained PyTorch Tiny MLP endpoint, not the browser implementation. It reports
 server inference and HTTP round-trip median and nearest-rank p95 separately.
 Model load time and the frontend's 100 ms scheduling interval are excluded.
 
@@ -104,7 +131,8 @@ CSV files contain raw state and integer labels (0/1/2); training normalizes them
 The eight features, in order, are ball x/width, ball y/height, vx/width, vy/height,
 paddle center/width, paddle width/court width, court width/960, court height/640.
 Positions are centers and velocities are pixels/second. The browser implements
-the same normalization for Tiny MLP and submits it to `/predict/normalized`.
+the same normalization for Tiny MLP and evaluates the bundled weights locally.
+`/predict/normalized` remains available for backend comparisons.
 Jev's existing raw-state `/predict` contract is preserved. Both implementations
 conform to `Policy.predict(GameState) -> Prediction`; register new factories in
 `backend/app/policies/` and add their UI options without changing physics.
@@ -130,6 +158,29 @@ substitution. A checkpoint created after backend startup loads on the first
 Tiny MLP request; restart the backend to load replacements of an existing model.
 `GET /policies` reports backend availability.
 
+After retraining, explicitly export the best checkpoint to the committed browser
+asset and verify numerical parity before building:
+
+```sh
+.venv/bin/python training/export_browser.py
+npm --prefix frontend run test:compile
+.venv/bin/python training/verify_browser.py --fixtures frontend/tests/fixtures/tiny-mlp.json
+npm --prefix frontend test
+npm --prefix frontend run build:static
+```
+
+`frontend/src/models/keepup_mlp_v1.json` contains feature/action metadata and
+8→32→32→3 weights. The export is bundled with the app, so it is committed despite
+other model artifacts being ignored. `verify_browser.py` compares 3,000
+independent states with PyTorch, including logits, confidence and action parity;
+it refreshes the small frontend reference fixture after retraining. Select a
+supported Node executable using `--node /path/to/node` if necessary.
+
+Development (`npm run dev`) defaults to Jev and supports both policies. A compiled
+local version is available via `npm --prefix frontend run build:local` and
+`npm --prefix frontend run preview:local`; it uses Vite mode `dual` and writes
+`frontend/dist-local/`. Public uploads should use **`frontend/dist/`**.
+
 Verification:
 
 ```sh
@@ -149,3 +200,14 @@ PLAYWRIGHT_MODULE=/tmp/keepup-browser/node_modules/playwright CHROME_PATH="/Appl
 It checks both real policies, frozen canvas and requests during pause, switching
 while paused, Space and a single game animation loop. Its screenshot goes to
 ignored `models/browser-smoke.png`.
+
+
+The static build has its own backend-blocked browser check. Serve `frontend/dist`
+at port 4173 (for example, `npm --prefix frontend run preview`), then run:
+
+```sh
+PLAYWRIGHT_MODULE=/tmp/keepup-browser/node_modules/playwright CHROME_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" node frontend/tests/browser-static-smoke.cjs
+```
+
+It requires Tiny MLP as the only selectable model and verifies gameplay,
+pause/resume and restart while blocking all backend and external requests.

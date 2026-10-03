@@ -15,6 +15,9 @@ interface Options {
   url?: string;
   intervalMs?: number;
   timeoutMs?: number;
+  initialModel?: PolicyId;
+  allowedModels?: readonly PolicyId[];
+  predictor?: typeof predictState;
 }
 
 const unavailable = (provider: string | null = 'openjev'): JevInferenceStatus => ({
@@ -23,6 +26,8 @@ const unavailable = (provider: string | null = 'openjev'): JevInferenceStatus =>
 
 export class ApiJevController implements JevController {
   private readonly url: string;
+  private readonly predictor: typeof predictState;
+  private readonly allowedModels: readonly PolicyId[];
   private readonly intervalMs: number;
   private readonly timeoutMs: number;
   private status = unavailable();
@@ -34,7 +39,12 @@ export class ApiJevController implements JevController {
   private generation = 0;
   private request: AbortController | null = null;
 
-  constructor({ url = 'http://127.0.0.1:8000/predict', intervalMs = 100, timeoutMs = 30000 }: Options = {}) {
+  constructor({ url = 'http://127.0.0.1:8000/predict', intervalMs = 100, timeoutMs = 30000, initialModel = 'jev', allowedModels = ['jev', 'tiny_mlp'], predictor = predictState }: Options = {}) {
+    if (!allowedModels.includes(initialModel)) throw new Error('Initial model is unavailable');
+    this.model = initialModel;
+    this.allowedModels = allowedModels;
+    this.predictor = predictor;
+    this.status = unavailable(initialModel === 'jev' ? 'openjev' : 'tiny_mlp_browser');
     this.url = url;
     this.intervalMs = Number.isFinite(intervalMs) && intervalMs >= 50 ? intervalMs : 100;
     this.timeoutMs = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 30000;
@@ -46,6 +56,7 @@ export class ApiJevController implements JevController {
   getModel(): PolicyId { return this.model; }
 
   setModel(model: PolicyId) {
+    if (!this.allowedModels.includes(model)) throw new Error('Model is unavailable in this build');
     if (model === this.model) return;
     this.resetPrediction();
     this.model = model;
@@ -88,7 +99,7 @@ export class ApiJevController implements JevController {
     const timeout = setTimeout(() => request.abort(), this.timeoutMs);
 
     try {
-      const result = await predictState(state, this.url, request.signal, this.model);
+      const result = await this.predictor(state, this.url, request.signal, this.model);
       if (!this.active || this.paused || generation !== this.generation) return;
       this.status = {
         connected: true, prediction: result.prediction,

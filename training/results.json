@@ -409,5 +409,20 @@
       "simulated_inference_delay_ms": 208.8144375011325,
       "seed": 2026
     }
-  ]
+  ],
+  "browser_parity": {
+    "samples": 3000,
+    "seed": 2026,
+    "action_agreement_percent": 100.0,
+    "action_mismatches": 0,
+    "max_logits_absolute_error": 1.52587890625e-05,
+    "max_confidence_absolute_error": 2.251150619358988e-06,
+    "browser_oracle_accuracy": 0.8936666666666667
+  },
+  "browser_static_smoke": {
+    "backend_requests": 0,
+    "pause_resume": true,
+    "restart": true,
+    "errors": []
+  }
 }

@@ -24,7 +24,7 @@ export function renderGame(ctx: CanvasRenderingContext2D, engine: GameEngine) {
   ctx.font = '12px monospace';
   ctx.textAlign = 'left';
   ctx.fillStyle = '#708275';
-  ctx.fillText('JEV', 24, 30);
+  ctx.fillText('AI', 24, 30);
   ctx.fillText('HUMAN / YOU', 24, height - 22);
 
   for (const player of [engine.jev, engine.human]) {
