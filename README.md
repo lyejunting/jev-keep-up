@@ -2,6 +2,8 @@
 
 React + TypeScript + Canvas. Tiny MLP runs entirely in the browser; local development also offers Jev through FastAPI. Human paddle at the bottom, AI at the top. First to 10 wins.
 
+Play it on Netlify here: https://glittering-otter-06d482.netlify.app/
+
 ## Browser-only site for Netlify
 
 Build from the repository root (requires the Node version listed below):
